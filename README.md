@@ -1,34 +1,14 @@
-# Trunk Recorder MQTT Status (and Units!) Plugin <!-- omit from toc -->
+# Trunk Recorder MQTT Status Plugin
 
-This is a plugin for Trunk Recorder that publish the current status over MQTT. External programs can use the MQTT messages to collect and display information on monitored systems.
-
-Requires trunk-recorder 5.0 or later, and Paho MQTT libraries
-
-- [Install](#install)
-- [Configure](#configure)
-- [MQTT Messages](#mqtt-messages)
-- [Trunk Recorder States](#trunk-recorder-states)
-- [MQTT Brokers](#mqtt-brokers)
-  - [Mosquitto MQTT Broker](#mosquitto-mqtt-broker)
-  - [NanoMQ](#nanomq)
-- [Docker](#docker)
+This is a plugin for Trunk Recorder that publish the current status over MQTT. External programs can use the MQTT messages to display what is going on.
 
 ## Install
 
-1. **Clone Trunk Recorder** source following these [instructions](https://github.com/robotastic/trunk-recorder/blob/master/docs/Install/INSTALL-LINUX.md).
-   
-2. **Install the Paho MQTT C & C++ Libraries**.
+1. **Build and install the current version of Trunk Recorder** following these [instructions](https://github.com/robotastic/trunk-recorder/blob/master/docs/INSTALL-LINUX.md). Make sure you do a `sudo make install` at the end to install the Trunk Recorder binary and libaries systemwide. The plugin will be built against these libraries.
 
-&emsp; If your package manager provides recent Paho MQTT libraries, e.g:
+2. Now, **install the Paho MQTT C & C++ Libraries**. The full documentation for that is [here](https://github.com/eclipse/paho.mqtt.cpp#unix-and-linux)... but the basic commands are as follows:
 
-```bash
-sudo apt install libpaho-mqtt-dev libpaho-mqttpp-dev
-```
-
-&emsp; If not, you may build and install these libraries from source:
-
-&emsp; - _Install Paho MQTT C_
-
+*Install Paho MQTT C*
 ```bash
 git clone https://github.com/eclipse/paho.mqtt.c.git
 cd paho.mqtt.c
@@ -38,81 +18,83 @@ sudo cmake --build build/ --target install
 sudo ldconfig
 ```
 
-&emsp; - _Install Paho MQTT C++_
-
+*Install Paho MQTT C++*
 ```bash
 git clone https://github.com/eclipse/paho.mqtt.cpp
 cd paho.mqtt.cpp
 
-cmake -Bbuild -H. -DPAHO_BUILD_STATIC=ON
+cmake -Bbuild -H. -DPAHO_BUILD_STATIC=ON  -DPAHO_BUILD_DOCUMENTATION=TRUE -DPAHO_BUILD_SAMPLES=TRUE
 sudo cmake --build build/ --target install
 sudo ldconfig
 ```
 
-3. **Build and install the plugin:**
-
-&emsp; This pluigin source should be cloned into the `/user_plugins` directory of the Trunk Recorder 5.0+ source tree.  It will be built and installed along with Trunk Recorder.
+3. Build and install the plugin:
 
 ```bash
-cd [your trunk-recorder github source directory]
-cd user_plugins
-git clone https://github.com/taclane/trunk-recorder-mqtt-status
-cd [your trunk-recorder build directory]
+mkdir build
+cd build
+cmake ..
 sudo make install
 ```
 
-&emsp; **NOTE:** Plugins will be automatically built and installed with Trunk Recorder.  To update either Trunk Recorder or a plugin, simply `cd` into the appropriate git directory and `git pull`.  Refer to the above instructions to `make install` any updates.
-
 ## Configure
 
-**Plugin options:**
+| Key       | Required | Default Value | Type   | Description                                                  |
+| --------- | :------: | ------------- | ------ | ------------------------------------------------------------ |
+| broker    |    ✓     |   tcp://localhost:1883            | string | The URL for the MQTT Message Broker. It should include the protocol used: **tcp**, **ssl**, **ws**, **wss** and the port, which is generally 1883 for tcp, 8883 for ssl, and 443 for ws. |
+| topic     |    ✓     |               | string | This is the base topic to use. The plugin will create subtopics for the different types of status messages. |
+| clientid  |          | tr-status     | string | Sets the MQTT client ID, only needs to be changed if multiple instances are connecting to one MQTT broker. | 
+| username  |          |               | string | If a username is required for the broker, add it here. |
+| password  |          |               | string | If a password is required for the broker, add it here. |
 
-| Key             | Required | Default Value        | Type       | Description                                                                                                                                                                              |
-| --------------- | :------: | -------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| broker          |    ✓     | tcp://localhost:1883 | string     | The URL for the MQTT Message Broker. It should include the protocol used: **tcp**, **ssl**, **ws**, **wss** and the port, which is generally 1883 for tcp, 8883 for ssl, and 443 for ws. |
-| topic           |    ✓     |                      | string     | This is the base MQTT topic. The plugin will create subtopics for the different status messages.                                                                                         |
-| unit_topic      |          |                      | string     | Optional topic to report unit stats over MQTT.                                                                                                                                           |
-| message_topic   |          |                      | string     | Optional topic to report trunking messages over MQTT.                                                                                                                                    |
-| console_logs    |          | false                | true/false | Optional setting to report console messages over MQTT.                                                                                                                                   |
-| username        |          |                      | string     | If a username is required for the broker, add it here.                                                                                                                                   |
-| password        |          |                      | string     | If a password is required for the broker, add it here.                                                                                                                                   |
-| client_id       |          | tr-status-xxxxxxxx   | string     | Override the client_id generated for this connection to the MQTT broker.                                                                                                                 |
-| mqtt_audio      |          | false                | true/false | Optional setting to report audio in base64 and call metadata over MQTT.                                                                                                                  |
-| mqtt_audio_type |          | wav                  | string     | Control which audio files to emit.  `wav`, `m4a` (if compression enabled), `both`, `none` (only the .json)                                                                               |
-| include_sys_info|          | false                | true/false | Include system identification fields (sysid, wacn, nac) in messages.                                                                                                                     |
-| qos             |          | 0                    | int        | Set the MQTT message [QOS level](https://www.eclipse.org/paho/files/mqttdoc/MQTTClient/html/qos.html)                                                                                    |
 
-**Trunk-Recorder options:**
 
-| Key                          | Required | Default Value               | Type   | Description                                                                                |
-| ---------------------------- | :------: | --------------------------- | ------ | ------------------------------------------------------------------------------------------ |
-| [instanceId](./config.json) |          | <nobr>trunk-recorder</nobr> | string | Append an `instance_id` key to identify the trunk-recorder instance sending MQTT messages. |
+### Plugin Object Example
+See the included [config.json](./config.json) as an example of how to load this plugin.
 
-**Plugin Usage:**
-
-See the included [config.json](./config.json) for an example how to load this plugin.
-
-```json
+```yaml
     "plugins": [
     {
-        "name": "MQTT Status",
+        "name": "mqtt status",
         "library": "libmqtt_status_plugin.so",
         "broker": "tcp://io.adafruit.com:1883",
         "topic": "robotastic/feeds",
-        "unit_topic": "robotastic/units",
         "username": "robotastic",
-        "password": "",
-        "console_logs": true,
-        "mqtt_audio": false,
-        "include_sys_info": true,
-        "mqtt_qos": 0
+        "password": "" 
     }]
 ```
 
-If the plugin cannot be found, or it is being run from a different location, it may be necessary to supply the full path:
 
-```json
-        "library": "/usr/local/lib/trunk-recorder/libmqtt_status_plugin.so",
+
+
+### Mosquitto MQTT Broker
+The Mosquitto MQTT is an easy way to have a local MQTT broker. It can be installed from a lot of package managers. 
+
+
+Starting it on a Mac:
+```bash
+/opt/homebrew/sbin/mosquitto -c /opt/homebrew/etc/mosquitto/mosquitto.conf
 ```
 
-[Rest of README content remains unchanged...]
+## Docker
+
+The included Dockerfile will allow buliding a trunk-recorder docker image with this plugin included.
+
+`docker-compose` can be used to automate the build and deployment of this image. In the Docker compose file replace the image line with a build line pointing to the location where this repo has been cloned to.   
+
+Docker compose file:
+
+```yaml
+version: '3'
+services:
+  recorder:
+    build: ./trunk-recorder-mqtt-status
+    container_name: trunk-recorder
+    restart: always
+    privileged: true
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - /var/run/dbus:/var/run/dbus 
+      - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket
+      - ./:/app
+```
