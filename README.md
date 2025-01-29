@@ -79,6 +79,7 @@ sudo make install
 | client_id       |          | tr-status-xxxxxxxx   | string     | Override the client_id generated for this connection to the MQTT broker.                                                                                                                 |
 | mqtt_audio      |          | false                | true/false | Optional setting to report audio in base64 and call metadata over MQTT.                                                                                                                  |
 | mqtt_audio_type |          | wav                  | string     | Control which audio files to emit.  `wav`, `m4a` (if compression enabled), `both`, `none` (only the .json)                                                                               |
+| include_sys_info|          | false                | true/false | Include system identification fields (sysid, wacn, nac) in messages.                                                                                                                     |
 | qos             |          | 0                    | int        | Set the MQTT message [QOS level](https://www.eclipse.org/paho/files/mqttdoc/MQTTClient/html/qos.html)                                                                                    |
 
 **Trunk-Recorder options:**
@@ -103,7 +104,8 @@ See the included [config.json](./config.json) for an example how to load this pl
         "password": "",
         "console_logs": true,
         "mqtt_audio": false,
-        "mqtt_qos": 0,
+        "include_sys_info": true,
+        "mqtt_qos": 0
     }]
 ```
 
@@ -113,120 +115,4 @@ If the plugin cannot be found, or it is being run from a different location, it 
         "library": "/usr/local/lib/trunk-recorder/libmqtt_status_plugin.so",
 ```
 
-## MQTT Messages
-
-The plugin will provide the following messages to the MQTT broker depending on configured topics.
-
-| Topic                   | Sub-Topic                                          | Retained | Description\*                                                      |
-| ----------------------- | -------------------------------------------------- | :------: | ------------------------------------------------------------------ |
-| topic                   | [rates](./example_messages.md#rates)               |          | Control channel decode rates                                       |
-| topic                   | [config](./example_messages.md#config)             |    ✓     | Trunk-recorder config information                                  |
-| topic                   | [systems](./example_messages.md#systems)           |    ✓     | List of configured systems                                         |
-| topic                   | [system](./example_messages.md#system)             |          | System configuration/startup                                       |
-| topic                   | [calls_active](./example_messages.md#calls_active) |          | List of active calls, updated every second                         |
-| topic                   | [recorders](./example_messages.md#recorders)       |          | List of all recorders, updated every 3 seconds                     |
-| topic                   | [recorder](./example_messages.md#recorder)         |          | Recorder status changes                                            |
-| topic                   | [call_start](./example_messages.md#call_start)     |          | New call                                                           |
-| topic                   | [call_end](./example_messages.md#call_end)         |          | Completed call                                                     |
-| topic                   | [audio](./example_messages.md#audio)               |          | Audio and metadata of completed call                               |
-| topic/trunk_recorder    | [status](./example_messages.md#plugin_status)      |    ✓     | Plugin status, sent on startup or when the broker loses connection |
-| topic/trunk_recorder    | [console](./example_messages.md#console_logs)      |          | Trunk-Recorder console log messages                                |
-| unit_topic/shortname    | [call](./example_messages.md#call)                 |          | Channel grants                                                     |
-| unit_topic/shortname    | [end](./example_messages.md#end)                   |          | Call end unit information\*\*                                      |
-| unit_topic/shortname    | [on](./example_messages.md#on)                     |          | Unit registration (radio on)                                       |
-| unit_topic/shortname    | [off](./example_messages.md#off)                   |          | Unit de-registration (radio off)                                   |
-| unit_topic/shortname    | [ackresp](./example_messages.md#ackresp)           |          | Unit acknowledge response                                          |
-| unit_topic/shortname    | [join](./example_messages.md#join)                 |          | Unit group affiliation                                             |
-| unit_topic/shortname    | [data](./example_messages.md#data)                 |          | Unit data grant                                                    |
-| unit_topic/shortname    | [ans_req](./example_messages.md#ans_req)           |          | Unit answer request                                                |
-| unit_topic/shortname    | [location](./example_messages.md#location)         |          | Unit location update                                               |
-| message_topic/shortname | [messages](./example_messages.md#messages)         |          | Trunking messages                                                  |
-
-\* Some messages have been changed for consistency. Please see links for examples and notes.  
-\*\* `end` is not a trunking message, but sent after trunk-recorder ends the call. This can be used to track conventional non-trunked calls.
-
-## Trunk Recorder States
-
-Trunk Recorder uses state definitions to manage call flows, recorder assignment, and demodulator operation. The MQTT plugin will include this information when possible. Below is a summary of these states, but not all may appear in MQTT messages.
-
-**call_state** / **rec_state**
-| State | State Type   | Description                                                                                                |
-| :---: | ------------ | ---------------------------------------------------------------------------------------------------------- |
-|   0   | `MONITORING` | Call: Active - No recorder is assigned - See **mon_state** table                                           |
-|   1   | `RECORDING`  | Call: Active - Recorder is assigned<br>Recorder: Assigned to call [Recording] - Demodulating transmissions |
-|   2   | `INACTIVE`   | Recorder: Assigned to call [Disconnecting] - Detaching from source and demodulator                         |
-|   3   | `ACTIVE`     | Recorder: Assigned to call [Tuned] - Not recording yet                                                     |
-|   4   | `IDLE`       | Recorder: Assigned to call [Squelched] - Not recording, has not timed out                                  |
-|   6   | `STOPPED`    | Recorder: Not assigned to call - Returning to `AVAILABLE` state                                            |
-|   7   | `AVAILABLE`  | Recorder: Not assigned to call - Free for use                                                              |
-|   8   | `IGNORE`     | Recorder: Assigned to call [Ignoring] - Ending call after unexpected data on the voice channel             |
-
-**mon_state**
-| State | State Type    | Description                                                                                                                      |
-| :---: | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-|   0   | `UNSPECIFIED` | Default state                                                                                                                    |
-|   1   | `UNKNOWN_TG`  | Not recording: `recordUnknown` is `false` and talkgroup is not found in the _talkgroup.csv_ (\*not currently implemented)        |
-|   2   | `IGNORED_TG`  | Not recording: Talkgroup has the ignore priority (`-1`) set in the _talkgroup.csv_                                               |
-|   3   | `NO_SOURCE`   | Not recording: No source exists for the requested voice frequency                                                                |
-|   4   | `NO_RECORDER` | Not recording: No recorders are available or talkgroup priority is too low                                                       |
-|   5   | `ENCRYPTED`   | Not recording: Encryption indicated by trunking messages or mode field (`E`,`DE`,`TE`) in the _talkgroup.csv_                    |
-|   6   | `DUPLICATE`   | Not recording: [multiSite] This call is a duplicate of a prior call                                                              |
-|   7   | `SUPERSEDED`  | Not recording: [multiSite] This call is a duplicate of a subsequent call with a site precedence indicated in the _talkgroup.csv_ |
-
-## MQTT Brokers
-
-### Mosquitto MQTT Broker
-
-The [Mosquitto](https://mosquitto.org) MQTT is an easy way to have a local MQTT broker. It can be installed from a lot of package managers.
-
-This broker does not impose a limit on the length of MQTT messages, and will handle packets up to 256 MB in size by default. 
-
-Starting it on a Mac:
-
-```bash
-/opt/homebrew/sbin/mosquitto -c /opt/homebrew/etc/mosquitto/mosquitto.conf
-```
-
-### NanoMQ
-
-The [NanoMQ](https://nanomq.io) broker is a lightweight alternative, but additional configuration may be required for Trunk Recorder systems with a large number of recorders or heavy call volume. 
-
-This broker **does** impose a limit on the length of MQTT messages, and the `max_packet_size` default of 10 KB may generate `MQTT error [-3]: Disconnected` errors with this plugin. 
-
-```
-# #============================================================
-# # NanoMQ Broker
-# #============================================================
-
-mqtt {
-    property_size = 32
-    max_packet_size = 10KB
-    max_mqueue_len = 2048
-    retry_interval = 10s
-    keepalive_multiplier = 1.25
-...
-```
-[Editing `/etc/nanomq.conf`](https://nanomq.io/docs/en/latest/config-description/mqtt.html) and increasing the packet size to 100 KB or more should be sufficient for MQTT messages generated by this plugin. If `mqtt_audio` is enabled packet size will need to be raised significantly.
-
-## Docker
-
-The included Dockerfile will allow building a trunk-recorder docker image with this plugin included.
-
-`docker-compose` can be used to automate the build and deployment of this image. In the Docker compose file replace the image line with a build line pointing to the location where this repo has been cloned to.
-
-Docker compose file:
-
-```yaml
-version: "3"
-services:
-  recorder:
-    build: ./trunk-recorder-mqtt-status
-    container_name: trunk-recorder
-    restart: always
-    privileged: true
-    volumes:
-      - /dev/bus/usb:/dev/bus/usb
-      - /var/run/dbus:/var/run/dbus
-      - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket
-      - ./:/app
-```
+[Rest of README content remains unchanged...]

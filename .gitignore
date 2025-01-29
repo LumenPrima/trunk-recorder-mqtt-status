@@ -1,3 +1,12 @@
-build
-.vscode
-.gitattributes
+# CMake build files
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+Makefile
+
+# Build outputs
+*.o
+*.so
+*.a
+*.dylib
+*.dll

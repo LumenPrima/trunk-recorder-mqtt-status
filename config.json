@@ -26,6 +26,7 @@
         "unit_topic": "robotastic/units",
         "mqtt_audio": false,
         "username": "robotastic",
-        "password": ""
+        "password": "",
+        "include_sys_info": true
     }]
 }

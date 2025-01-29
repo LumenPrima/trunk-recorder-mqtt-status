@@ -59,6 +59,7 @@ class Mqtt_Status : public Plugin_Api, public virtual mqtt::callback
   bool console_enabled = false;
   bool mqtt_audio = false;
   std::string mqtt_audio_type;
+  bool include_sys_info = false;
   std::string log_prefix;
   time_t call_resend_time = time(NULL);
 
@@ -249,12 +250,24 @@ public:
       if (sys_type.find("conventional") == std::string::npos)
       {
         boost::property_tree::ptree stat_node = sys->get_stats_current(timeDiff);
-        system_json += {
+        nlohmann::ordered_json rate_json = {
             {"sys_num", stat_node.get<int>("id")},
-            {"sys_name", sys->get_short_name()},
+            {"sys_name", sys->get_short_name()}};
+
+        // Add system identification fields if enabled
+        if (include_sys_info) {
+            rate_json["sysid"] = int_to_hex(sys->get_sys_id(), 0);
+            rate_json["wacn"] = int_to_hex(sys->get_wacn(), 0);
+            rate_json["nac"] = int_to_hex(sys->get_nac(), 0);
+        }
+
+        // Add remaining fields
+        nlohmann::ordered_json remaining = {
             {"decoderate", round_float(stat_node.get<double>("decoderate"))},
             {"decoderate_interval", timeDiff},
             {"control_channel", sys->get_current_control_channel()}};
+        rate_json.update(remaining);
+        system_json += rate_json;
       }
     }
     return send_json(system_json, "rates", "rates", topic_status, false);
@@ -480,7 +493,17 @@ public:
       {
         nlohmann::ordered_json unit_json = {
             {"sys_num", call_info.sys_num},
-            {"sys_name", call_info.short_name},
+            {"sys_name", call_info.short_name}};
+
+        // Add system identification fields if enabled
+        if (include_sys_info) {
+            unit_json["sysid"] = int_to_hex(sys->get_sys_id(), 0);
+            unit_json["wacn"] = int_to_hex(sys->get_wacn(), 0);
+            unit_json["nac"] = int_to_hex(sys->get_nac(), 0);
+        }
+
+        // Add remaining fields
+        nlohmann::ordered_json remaining = {
             {"unit", transmission.source},
             {"unit_alpha_tag", source_list[transmission_num].tag},
             {"talkgroup", call_info.talkgroup},
@@ -501,6 +524,7 @@ public:
             {"spike_count", transmission.spike_count},
             {"sample_count", transmission.sample_count},
             {"transmission_filename", transmission.filename}};
+        unit_json.update(remaining);
         send_json(unit_json, "end", "end", topic_unit + "/" + call_info.short_name.c_str(), false);
         transmission_num++;
       }
@@ -510,7 +534,17 @@ public:
         {"id", boost::lexical_cast<std::string>(call_info.sys_num) + "_" + boost::lexical_cast<std::string>(call_info.talkgroup) + "_" + boost::lexical_cast<std::string>(call_info.start_time)},
         {"call_num", call_info.call_num},
         {"sys_num", call_info.sys_num},
-        {"sys_name", call_info.short_name},
+        {"sys_name", call_info.short_name}};
+
+    // Add system identification fields if enabled
+    if (include_sys_info) {
+        call_json["sysid"] = int_to_hex(sys->get_sys_id(), 0);
+        call_json["wacn"] = int_to_hex(sys->get_wacn(), 0);
+        call_json["nac"] = int_to_hex(sys->get_nac(), 0);
+    }
+
+    // Add remaining fields
+    nlohmann::ordered_json remaining = {
         {"freq", call_info.freq},
         {"unit", call_info.transmission_source_list[0].source},
         {"unit_alpha_tag", call_info.transmission_source_list[0].tag},
@@ -547,6 +581,7 @@ public:
         {"signal", round_float(call_info.signal)},
         {"noise", round_float(call_info.noise)},
         {"call_filename", call_info.filename}};
+    call_json.update(remaining);
 
     if (call_info.compress_wav)
     {
@@ -720,6 +755,7 @@ public:
     mqtt_qos = config_data.value("qos", 0);
     mqtt_audio = config_data.value("mqtt_audio", false);
     mqtt_audio_type = config_data.value("mqtt_audio_type", "wav");
+    include_sys_info = config_data.value("include_sys_info", false);
     mqtt_client_id = config_data.value("client_id", generate_client_id());
 
     // Enable topics and clean up stray '/' if encountered
@@ -757,6 +793,7 @@ public:
     BOOST_LOG_TRIVIAL(info) << log_prefix << "Console Message Topic:  " << ((console_enabled == false) ? "[disabled]" : topic_console + "/console");
     BOOST_LOG_TRIVIAL(info) << log_prefix << "MQTT Audio Topic:       " << ((mqtt_audio == false) ? "[disabled]" : topic_status + "/audio");
     BOOST_LOG_TRIVIAL(info) << log_prefix << "MQTT Audio (wav/m4a):   " << ((mqtt_audio == false) ? "[disabled]" : mqtt_audio_type);
+    BOOST_LOG_TRIVIAL(info) << log_prefix << "Include Sys Info:       " << (include_sys_info ? "enabled" : "disabled");
     BOOST_LOG_TRIVIAL(info) << log_prefix << "MQTT QOS:               " << mqtt_qos;
     return 0;
   }
@@ -945,12 +982,23 @@ public:
   {
     boost::property_tree::ptree stat_node = call->get_stats();
     json talkgroup_json = get_tg_json(call->get_system(), stat_node.get<int>("talkgroup"));
+    System *sys = call->get_system();
 
     nlohmann::ordered_json call_json = {
         {"id", stat_node.get<std::string>("id")},
         {"call_num", stat_node.get<long>("callNum")},
         {"sys_num", stat_node.get<int>("sysNum")},
-        {"sys_name", stat_node.get<std::string>("shortName")},
+        {"sys_name", stat_node.get<std::string>("shortName")}};
+
+    // Add system identification fields if enabled
+    if (include_sys_info) {
+        call_json["sysid"] = int_to_hex(sys->get_sys_id(), 0);
+        call_json["wacn"] = int_to_hex(sys->get_wacn(), 0);
+        call_json["nac"] = int_to_hex(sys->get_nac(), 0);
+    }
+
+    // Add remaining fields
+    nlohmann::ordered_json remaining = {
         {"freq", stat_node.get<double>("freq")},
         {"unit", stat_node.get<long>("srcId")},
         {"unit_alpha_tag", call->get_system()->find_unit_tag(stat_node.get<long>("srcId"))},
@@ -1015,6 +1063,13 @@ public:
         {"sys_name", sys->get_short_name()},
         {"unit", source_id},
         {"unit_alpha_tag", sys->find_unit_tag(source_id)}};
+
+    // Add system identification fields if enabled
+    if (include_sys_info) {
+        unit_json["sysid"] = int_to_hex(sys->get_sys_id(), 0);
+        unit_json["wacn"] = int_to_hex(sys->get_wacn(), 0);
+        unit_json["nac"] = int_to_hex(sys->get_nac(), 0);
+    }
     return unit_json;
   }
 
@@ -1035,6 +1090,13 @@ public:
         {"talkgroup_group", tg_json["talkgroup_group"]},
         {"talkgroup_tag", tg_json["talkgroup_tag"]},
         {"talkgroup_patches", tg_json["talkgroup_patches"]}};
+
+    // Add system identification fields if enabled
+    if (include_sys_info) {
+        unit_tg_json["sysid"] = int_to_hex(sys->get_sys_id(), 0);
+        unit_tg_json["wacn"] = int_to_hex(sys->get_wacn(), 0);
+        unit_tg_json["nac"] = int_to_hex(sys->get_nac(), 0);
+    }
     return unit_tg_json;
   }
 
