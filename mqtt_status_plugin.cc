@@ -714,13 +714,17 @@ public:
   {
     if (unit_enabled && system != nullptr)
     {
+      // Safe string copies -- these methods return std::string, never null
+      std::string short_name = system->get_short_name();
+      std::string unit_tag = system->find_unit_tag(unitId);
+
       nlohmann::ordered_json signal_json;
       nlohmann::ordered_json signal_data = {
           {"sys_num", system->get_sys_num()},
-          {"sys_name", system->get_short_name()},
+          {"sys_name", short_name},
           {"unit", unitId},
-          {"unit_alpha_tag", system->find_unit_tag(unitId)},
-          {"signaling_type", std::string(signaling_type)}};
+          {"unit_alpha_tag", unit_tag},
+          {"signaling_type", signaling_type ? std::string(signaling_type) : "unknown"}};
 
       // Map SignalType enum to string
       std::string sig_str;
@@ -754,7 +758,7 @@ public:
       signal_json["timestamp"] = (int)time(NULL);
       signal_json["instance_id"] = tr_instance_id;
 
-      return send_json(signal_json, "signal", "signal", topic_unit + "/" + system->get_short_name(), false);
+      return send_json(signal_json, "signal", "signal", topic_unit + "/" + short_name, false);
     }
     return 0;
   }
