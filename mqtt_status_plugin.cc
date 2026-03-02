@@ -704,6 +704,61 @@ public:
     return 0;
   }
 
+
+  // signal()
+  //   Signaling data decoded from audio (MDC1200, FleetSync, STAR)
+  //   TRUNK-RECORDER PLUGIN API: Called on each decoded signal from the analog recorder
+  //   MQTT: topic_unit/shortname/signal
+  int signal(long unitId, const char *signaling_type, gr::blocks::SignalType sig_type,
+             Call *call, System *system, Recorder *recorder) override
+  {
+    if (unit_enabled && system != nullptr)
+    {
+      nlohmann::ordered_json signal_json;
+      nlohmann::ordered_json signal_data = {
+          {"sys_num", system->get_sys_num()},
+          {"sys_name", system->get_short_name()},
+          {"unit", unitId},
+          {"unit_alpha_tag", system->find_unit_tag(unitId)},
+          {"signaling_type", std::string(signaling_type)}};
+
+      // Map SignalType enum to string
+      std::string sig_str;
+      switch (sig_type) {
+        case gr::blocks::SignalType::Normal:          sig_str = "normal"; break;
+        case gr::blocks::SignalType::Emergency:       sig_str = "emergency"; break;
+        case gr::blocks::SignalType::EmergencyAck:    sig_str = "emergency_ack"; break;
+        case gr::blocks::SignalType::RadioCheck:      sig_str = "radio_check"; break;
+        case gr::blocks::SignalType::RadioCheckAck:   sig_str = "radio_check_ack"; break;
+        case gr::blocks::SignalType::RadioStun:       sig_str = "radio_stun"; break;
+        case gr::blocks::SignalType::RadioStunAck:    sig_str = "radio_stun_ack"; break;
+        case gr::blocks::SignalType::RadioRevive:     sig_str = "radio_revive"; break;
+        case gr::blocks::SignalType::RadioReviveAck:  sig_str = "radio_revive_ack"; break;
+        case gr::blocks::SignalType::NormalPre:       sig_str = "normal_pre"; break;
+        case gr::blocks::SignalType::EmergencyPre:    sig_str = "emergency_pre"; break;
+        default:                                      sig_str = "unknown"; break;
+      }
+      signal_data["signal_type"] = sig_str;
+
+      if (call != nullptr) {
+        json tg_json = get_tg_json(system, call->get_talkgroup());
+        signal_data["talkgroup"] = call->get_talkgroup();
+        signal_data["talkgroup_alpha_tag"] = tg_json["talkgroup_alpha_tag"];
+        signal_data["talkgroup_group"] = tg_json["talkgroup_group"];
+        signal_data["talkgroup_tag"] = tg_json["talkgroup_tag"];
+        signal_data["freq"] = call->get_freq();
+        signal_data["call_num"] = call->get_call_num();
+      }
+
+      signal_json["signal"] = signal_data;
+      signal_json["timestamp"] = (int)time(NULL);
+      signal_json["instance_id"] = tr_instance_id;
+
+      return send_json(signal_json, "signal", "signal", topic_unit + "/" + system->get_short_name(), false);
+    }
+    return 0;
+  }
+
   // ********************************
   // trunk-recorder plugin API & startup
   // ********************************

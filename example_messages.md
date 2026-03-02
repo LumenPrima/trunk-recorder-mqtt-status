@@ -1057,3 +1057,39 @@ Console log messages forwarded over MQTT.
     "instance_id": "east-antenna"
 }
 ```
+# Signal Events
+
+## signal
+
+Signaling data decoded from analog audio (MDC1200, FleetSync, STAR). Published when the analog recorder's decoder detects an in-band signaling burst. Includes the associated call context (talkgroup, frequency) when available.
+
+`unit_topic/shortname/signal`
+
+```json
+{
+  "type": "signal",
+  "signal": {
+    "sys_num": 4,
+    "sys_name": "LuzerneAnalog",
+    "unit": 51522,
+    "unit_alpha_tag": "Engine 7",
+    "signaling_type": "MDC1200",
+    "signal_type": "normal",
+    "talkgroup": 15586,
+    "talkgroup_alpha_tag": "Fire East A",
+    "talkgroup_group": "Fire",
+    "talkgroup_tag": "Fire Tac",
+    "freq": 155865000,
+    "call_num": 13
+  },
+  "timestamp": 1772464875,
+  "instance_id": "trunk-recorder"
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `signaling_type` | Decoder type: `MDC1200`, `FLEETSYNC`, or `STAR` |
+| `signal_type` | Signal meaning: `normal` (PTT ID), `emergency`, `emergency_ack`, `radio_check`, `radio_check_ack`, `radio_stun`, `radio_stun_ack`, `radio_revive`, `radio_revive_ack`, `normal_pre` (pre-key), `emergency_pre` |
+| `unit` | Decoded unit ID (MDC1200: 16-bit hex as decimal, FleetSync: fleet+unit) |
+| `talkgroup`, `freq`, `call_num` | Present when a call is active on the recorder at the time of the signal decode |
