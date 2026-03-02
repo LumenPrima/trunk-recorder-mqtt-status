@@ -718,7 +718,6 @@ public:
       std::string short_name = system->get_short_name();
       std::string unit_tag = system->find_unit_tag(unitId);
 
-      nlohmann::ordered_json signal_json;
       nlohmann::ordered_json signal_data = {
           {"sys_num", system->get_sys_num()},
           {"sys_name", short_name},
@@ -754,11 +753,7 @@ public:
         signal_data["call_num"] = call->get_call_num();
       }
 
-      signal_json["signal"] = signal_data;
-      signal_json["timestamp"] = (int)time(NULL);
-      signal_json["instance_id"] = tr_instance_id;
-
-      return send_json(signal_json, "signal", "signal", topic_unit + "/" + short_name, false);
+      return send_json(signal_data, "signal", "signal", topic_unit + "/" + short_name, false);
     }
     return 0;
   }
